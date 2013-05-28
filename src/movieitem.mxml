@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:mx="http://www.adobe.com/2006/mxml" width="300" height="60">
+	<mx:Image width="50" height="50" source="{data.group.thumbnail.getItemAt(0).url}"/>
+	<mx:Text width="100%" height="100%" text="{data.title}" textAlign="left"/> 
+</mx:HBox>

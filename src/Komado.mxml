@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<s:WindowedApplication xmlns:fx="http://ns.adobe.com/mxml/2009"
+					   xmlns:s="library://ns.adobe.com/flex/spark"
+					   xmlns:mx="library://ns.adobe.com/flex/mx"
+					   width="320" height="500"
+					   showStatusBar="false"
+					   applicationComplete="init();">
+	<fx:Declarations>
+		<!-- 非ビジュアルエレメント (サービス、値オブジェクトなど) をここに配置 -->
+		<mx:HTTPService id="youtubeapi" url="http://gdata.youtube.com/feeds/api/videos?max-results=50" result="youtubeapi_result(event)" />
+	</fx:Declarations>
+	<fx:Script>
+		<![CDATA[
+			import air.update.*;
+			import air.update.events.*;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.UIComponent;
+			import mx.events.FlexEvent;
+			import mx.rpc.events.ResultEvent;
+			private var player:Object;
+			[Bindable]
+			public var movielist:ArrayCollection = new ArrayCollection; 
+			
+			private function init():void
+			{
+				var updater:ApplicationUpdaterUI = new ApplicationUpdaterUI();
+				updater.configurationFile = new File("app:/conf.xml");
+				updater.addEventListener(ErrorEvent.ERROR, function():void{});
+				updater.addEventListener(UpdateEvent.INITIALIZED, function():void{updater.checkNow();});
+				updater.initialize();
+				
+				this.loaderInfo.uncaughtErrorEvents.addEventListener( UncaughtErrorEvent.UNCAUGHT_ERROR, function(e:UncaughtErrorEvent ):void
+				{
+					Alert.show(e.text);
+				});
+				var loader:Loader = new Loader();
+				loader.contentLoaderInfo.addEventListener(Event.INIT,initHandler);
+				loader.load(new URLRequest("http://www.youtube.com/apiplayer?version=3"));
+				
+				infoPanel.visible = false;
+			}
+			
+			private function initHandler(e:Event):void{
+				var container:UIComponent = new UIComponent();
+				container.y = 35;
+				addElement(container);
+				player = Loader(LoaderInfo(e.currentTarget).loader).content as Object;
+				container.addChild(player as DisplayObject);
+				//player.setVolume(20);
+				player.addEventListener("onReady",onReadyHandler);
+				player.addEventListener("onError", onErrorHandler);
+				player.addEventListener("onStateChange", onStateChangeHandler);
+				player.addEventListener("onPlaybackQualityChange", onPlaybackQualityChangeHandler);
+			}
+			
+			private function onReadyHandler(e:Event):void{
+				trace("Ready",Object(e).data);
+				/**
+				 * プレイヤーのサイズ
+				 */ 
+				player.setSize(320, 240);
+				/**
+				 * 再生に関するメソッドは、以下の4種類
+				 * 1.指定するvideoIDの動画のサムネイルをロード。スタートボタンを中央に表示したまま停止。
+				 * player.cueVideoById(videoId:String, startSeconds:Number, suggestedQuality:String):Void
+				 * 2.指定するvideoURLの動画のサムネイルをロード。スタートボタンを中央に表示したまま停止。
+				 * player.cueVideoByUrl(mediaContentUrl:String, startSeconds:Number):Void
+				 * 3.指定するvideoIDの動画をロードして自動的に再生を開始する。
+				 * player.loadVideoById(videoId:String, startSeconds:Number, suggestedQuality:String):Void
+				 * 4.指定するvideoURLの動画をロードして自動的に再生を開始する。
+				 * player.loadVideoByUrl(mediaContentUrl:String, startSeconds:Number):Void
+				 */ 
+				//player.cueVideoById("qQDBaTIjY3s");
+			}
+			private function onErrorHandler(e:Event):void{
+				/**
+				 * エラーコード
+				 * 100 要求した動画が見つからないとき
+				 * 150,101 要求した動画が組み込みプレイヤーでの再生を許可していないとき
+				 */ 
+				trace("Error",Object(e).data);
+			}
+			private function onStateChangeHandler(e:Event):void{
+				/**
+				 * -1 未スタート（SWFが最初にロードされたとき）
+				 * 0 終了
+				 * 1 再生中
+				 * 2 一時停止
+				 * 3 バッファリング
+				 * 5 停止（SWFが読み込まれ，再生可能になったとき）
+				 */ 
+				trace("StateChange",Object(e).data);
+				if(Object(e).data == 0) {
+					selectedIndex++;
+					playMovie();
+				}
+			}
+			private function onPlaybackQualityChangeHandler(e:Event):void{
+				trace("PlaybackQualityChange",Object(e).data);
+			}
+			public function send_request():void {
+				var uv:URLVariables = new URLVariables;
+				uv.vq = searchTextInput.text;
+				youtubeapi.request = uv;
+				youtubeapi.send();
+				
+			}
+			public function youtubeapi_result(event:ResultEvent):void {
+				movielist.removeAll();
+				for(var i:int=0;i<event.result.feed.entry.length;i++) {
+					movielist.addItem(event.result.feed.entry[i]);
+				}
+			}
+			private var selectedIndex:int;
+			public function selectedList():void {
+				selectedIndex = tilelist.selectedIndex;
+				playMovie();
+			}
+			private function playMovie():void
+			{
+				var video_id:String = movielist.getItemAt(selectedIndex).id;
+				player.loadVideoByUrl(video_id);
+				player.setVolume(slider.value);
+				this.title = movielist.getItemAt(selectedIndex).title;
+				infoPanel.title = movielist.getItemAt(selectedIndex).title;
+				infoTextArea.text = movielist.getItemAt(selectedIndex).content;
+			}
+			public function alwaysInFrontHandler():void
+			{
+				this.alwaysInFront = AlwaysInFrontCheckBox.selected;
+			}
+			public function volumeHandler():void
+			{
+				player.setVolume(slider.value);
+			}
+		]]>
+	</fx:Script>
+	<s:TextInput id="searchTextInput" x="34" y="10" width="214" enter="send_request()"/>
+	<mx:TileList id="tilelist" x="0" y="310" width="100%" height="190" borderVisible="false"
+				 dataProvider="{movielist}" doubleClick="selectedList()" doubleClickEnabled="true"
+				 itemRenderer="movieitem">
+	</mx:TileList>
+	<s:CheckBox x="256" y="10" label="最前面" id="AlwaysInFrontCheckBox" change="alwaysInFrontHandler();"/>
+	<s:Image x="10" y="11" source="@Embed('assets/zoom.png')"/>
+	
+	<s:Button x="10" y="286" width="50" icon="@Embed('assets/control_play.png')" click="player.playVideo();"/>
+	<s:Button x="60" y="286" width="50" icon="@Embed('assets/control_pause.png')" click="player.pauseVideo();"/>
+
+	<s:Image x="120" y="288" source="@Embed('assets/sound.png')"/>
+	<s:HSlider id="slider" x="140" y="291" width="114" change="volumeHandler();" maximum="100"
+			   minimum="0" value="20"/>
+
+	<s:Image x="0" y="35" width="320" height="240" source="@Embed('assets/colorbar.png')"/>
+	<s:Panel id="infoPanel" x="0" y="310" width="320" height="190" borderVisible="false">
+		<s:TextArea id="infoTextArea" x="0" y="0" width="320" height="159" borderVisible="false"
+					editable="false"/>
+	</s:Panel>
+	<s:CheckBox x="268" y="284" label="情報" change="infoPanel.visible = !infoPanel.visible"/>
+</s:WindowedApplication>
